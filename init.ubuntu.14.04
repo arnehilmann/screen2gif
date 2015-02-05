@@ -1,0 +1,14 @@
+#!/bin/bash
+set -e -E -u
+
+if ! [[ -x /usr/bin/avconv ]]; then
+    echo "installing missing libav-tools"
+    sudo apt-get install libav-tools
+fi
+
+if ! [[ -x /usr/bin/ffcast ]]; then
+    echo "installing missing ffcast"
+    sudo add-apt-repository ppa:minos-archive/main
+    (cd /tmp; sudo apt-get update && sudo apt-get install ffcast)
+fi
+
