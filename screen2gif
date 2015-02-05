@@ -26,7 +26,7 @@ echo "---- gif: $GIF"
 mkdir -p $OUTDIR
 
 echo "-- recording screencast"
-ffcast -w -vv -s ffmpeg -r $FRAMERATE -framerate $FRAMERATE -- -y -f x11grab -i :0.0 -vcodec huffyuv $AVI
+ffcast -w -vv -s avconv -r $FRAMERATE -framerate $FRAMERATE -- -y -f x11grab -i :0.0 -vcodec huffyuv $AVI
 du $AVI | sed "s/^/---- /"
 
 echo "-- compressing and converting to gif animation"
