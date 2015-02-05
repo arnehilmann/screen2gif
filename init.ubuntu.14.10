@@ -1,0 +1,19 @@
+#!/bin/bash
+set -e -E -u
+
+UPDATE_NEEDED=
+
+if ! [[ -x /usr/bin/ffcast ]]; then
+    sudo add-apt-repository ppa:minos-archive/main
+    UPDATE_NEEDED=yes
+fi
+
+if ! [[ -x /usr/bin/ffmpeg ]]; then
+    sudo add-apt-repository ppa:jon-severinsson/ffmpeg
+    UPDATE_NEEDED=yes
+fi
+
+if [[ -n $UPDATE_NEEDED ]]; then
+    (cd /tmp; sudo apt-get update && sudo apt-get install ffcast ffmpeg)
+fi
+
