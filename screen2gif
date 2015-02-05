@@ -1,0 +1,50 @@
+#!/bin/bash
+set -e -E -u -C -o pipefail
+
+SCRIPT=$(basename $0)
+
+echo "$SCRIPT started"
+
+NAME=${1:?no NAME given?!}
+FRAMERATE=${2:-2}
+END_PAUSE_SECONDS=${3:-5}
+
+
+OUTDIR=$PWD/out
+DELAY=$(( 100 / $FRAMERATE ))
+AVI=$OUTDIR/$NAME.avi
+GIF=$OUTDIR/$NAME.gif
+TMP_GIF=$OUTDIR/$NAME.tmp.gif
+
+echo "-- settings"
+echo "---- avi: $AVI"
+echo "---- framerate: $FRAMERATE"
+echo "---- delay: $DELAY"
+echo "---- end pause: $END_PAUSE_SECONDS"
+echo "---- gif: $GIF"
+
+mkdir -p $OUTDIR
+
+echo "-- recording screencast"
+ffcast -w % ffmpeg -y -f x11grab -framerate $FRAMERATE \
+    -video_size %s -i %D+%c -codec:v huffyuv                  \
+    -vf crop="iw-mod(iw\\,2):ih-mod(ih\\,2)" $AVI
+du $AVI | sed "s/^/---- /"
+
+echo "-- compressing and converting to gif animation"
+convert -limit memory 1 \
+    -limit map 1 \
+    -delay $DELAY \
+    -layers optimize \
+    -loop 0 \
+    $AVI $TMP_GIF
+
+echo "-- adding pause at end of loop"
+convert $TMP_GIF \( +clone -set delay $(( $END_PAUSE_SECONDS * 100 )) \) +swap +delete $GIF
+du $GIF | sed "s/^/---- /"
+
+rm -f $TMP_GIF
+
+echo "-- resulting animated gif: $GIF"
+
+echo "$SCRIPT finished, took $SECONDS seconds"
