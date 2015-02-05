@@ -1,48 +1,58 @@
-#!/bin/bash
-set -e -E -u -C -o pipefail
+#!/usr/bin/env python
+"""
+Usage: screen2gif MOVIENAME [options]
 
-SCRIPT=$(basename $0)
+Options:
+    -h --help           Usage information
+    --record-fps=FPS    frames/second when recording [default: 2]
+    --playback-fps=FPS  frames/second on playback [default: 4]
+    --loop-pause=SECS   seconds to wait before replaying movie [default: 10]
+    -o=DIR              output dir [default: out]
+"""
+import os
+import errno
+import subprocess
 
-echo "$SCRIPT started"
+from docopt import docopt
 
-NAME=${1:?no NAME given?!}
-FRAMERATE=${2:-2}
-END_PAUSE_SECONDS=${3:-5}
+arguments = docopt(__doc__)
+print arguments
 
+output = arguments["-o"]
+record_fps = arguments["--record-fps"]
+playback_fps = arguments["--playback-fps"]
+movie_name = arguments["MOVIENAME"]
 
-OUTDIR=$PWD/out
-DELAY=$(( 100 / $FRAMERATE ))
-AVI=$OUTDIR/$NAME.avi
-GIF=$OUTDIR/$NAME.gif
-TMP_GIF=$OUTDIR/$NAME.tmp.gif
+delay = 100 / int(playback_fps)
+movie_filename = os.path.join(output, movie_name + ".avi")
+gif_filename = os.path.join(output, movie_name + ".gif")
+tmp_filename = os.path.join(output, movie_name + ".tmp.gif")
+loop_pause = int(arguments["--loop-pause"])
 
-echo "-- settings"
-echo "---- avi: $AVI"
-echo "---- framerate: $FRAMERATE"
-echo "---- delay: $DELAY"
-echo "---- end pause: $END_PAUSE_SECONDS"
-echo "---- gif: $GIF"
+print "  movie file  %s" % movie_filename
+print "  record fps  %s" % record_fps
+print "playback fps  %s" % record_fps
+print "    gif file  %s" % gif_filename
+print "        loop  %i" % loop_pause
 
-mkdir -p $OUTDIR
+loop_pause = 100 * loop_pause
 
-echo "-- recording screencast"
-ffcast -w -vv -s avconv -r $FRAMERATE -framerate $FRAMERATE -- -y -f x11grab -i :0.0 -vcodec huffyuv $AVI
-du $AVI | sed "s/^/---- /"
+try:
+    os.makedirs(output)
+except OSError, e:
+    if e.errno != errno.EEXIST:
+        raise
 
-echo "-- compressing and converting to gif animation"
-convert -limit memory 1 \
-    -limit map 1 \
-    -delay $DELAY \
-    -layers optimize \
-    -loop 0 \
-    $AVI $TMP_GIF
+subprocess.check_call(["ffcast", "-w", "-vv", "-s", "avconv", "-r", record_fps, "-framerate", record_fps, "--", "-y", "-f", "x11grab", "-i", ":0.0", "-vcodec", "huffyuv", movie_filename])
+movie_size = os.path.getsize(movie_filename)
+print "   movie filesive  %6ik" % int(movie_size / 1000)
 
-echo "-- adding pause at end of loop"
-convert $TMP_GIF \( +clone -set delay $(( $END_PAUSE_SECONDS * 100 )) \) +swap +delete $GIF
-du $GIF | sed "s/^/---- /"
+subprocess.check_call(["convert", "-limit", "memory", "1", "-limit", "map", "1",
+    "-delay", str(delay), "-layers", "optimize", "-loop", "0", movie_filename, tmp_filename])
 
-rm -f $TMP_GIF
+subprocess.check_call(["convert", tmp_filename, "(", "+clone", "-set", "delay", str(loop_pause), ")", "+swap", "+delete", gif_filename])
+gif_size = os.path.getsize(gif_filename)
+print "     gif filesize  %6ik" % int(gif_size / 1000)
+print "compression ratio  %6i" % int(movie_size / gif_size)
 
-echo "-- resulting animated gif: $GIF"
-
-echo "$SCRIPT finished, took $SECONDS seconds"
+os.remove(tmp_filename)
