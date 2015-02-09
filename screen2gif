@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 """
+Record a screencast and convert it to an animated gif
+
 Usage: screen2gif MOVIENAME [options]
 
 Options:
@@ -8,15 +10,23 @@ Options:
     --playback-fps=FPS  frames/second on playback [default: 4]
     --loop-pause=SECS   seconds to wait before replaying movie [default: 10]
     -o=DIR              output dir [default: out]
+    --encode-only       use existing movie, render gif
 """
-import os
 import errno
+import os
+import re
 import subprocess
 
 from docopt import docopt
 
 arguments = docopt(__doc__)
-print arguments
+
+description = []
+for line in __doc__.splitlines():
+    if re.match("UsAgE", line, re.I):
+        break
+    description.append(line)
+print "\n".join(description)
 
 output = arguments["-o"]
 record_fps = arguments["--record-fps"]
@@ -28,12 +38,22 @@ movie_filename = os.path.join(output, movie_name + ".avi")
 gif_filename = os.path.join(output, movie_name + ".gif")
 tmp_filename = os.path.join(output, movie_name + ".tmp.gif")
 loop_pause = int(arguments["--loop-pause"])
+encode_only = arguments["--encode-only"]
 
-print "  movie file  %s" % movie_filename
-print "  record fps  %s" % record_fps
-print "playback fps  %s" % record_fps
-print "    gif file  %s" % gif_filename
-print "        loop  %i" % loop_pause
+def section(header):
+    print
+    print "-- %s" % header
+
+def log(key, value):
+    print "%20s  %s" % (key, value)
+
+
+section("settings")
+log("movie file", movie_filename)
+log("record fps", record_fps)
+log("playback fps", record_fps)
+log("gif file", gif_filename)
+log("loop", loop_pause)
 
 loop_pause = 100 * loop_pause
 
@@ -43,16 +63,34 @@ except OSError, e:
     if e.errno != errno.EEXIST:
         raise
 
-subprocess.check_call(["ffcast", "-w", "-vv", "-s", "avconv", "-r", record_fps, "-framerate", record_fps, "--", "-y", "-f", "x11grab", "-i", ":0.0", "-vcodec", "huffyuv", movie_filename])
-movie_size = os.path.getsize(movie_filename)
-print "   movie filesive  %6ik" % int(movie_size / 1000)
+if not encode_only:
+    subprocess.check_call(["ffcast", "-w", "-vv", "-s", "avconv", "-r", record_fps, "-framerate", record_fps, "--", "-y", "-f", "x11grab", "-i", ":0.0", "-vcodec", "huffyuv", movie_filename])
 
+section("movie information '%s'" % movie_filename)
+movie_length = "unknown"
+avprobe_output = subprocess.check_output(["avprobe", "-i", movie_filename], stderr=subprocess.STDOUT)
+for line in avprobe_output.splitlines():
+    match = re.search(".*Duration: ([^,]*),.*", line)
+    if match:
+        movie_length = match.group(1)
+    match = re.search(".*Stream.*Video.*bgra, ([^,]*),.*", line)
+    if match:
+        movie_geometry = match.group(1)
+log("     movie length", movie_length)
+log("   movie geometry", movie_geometry)
+
+movie_size = os.path.getsize(movie_filename)
+log("   movie filesize", "%ik" % int(movie_size / 1000))
+
+section("gif information '%s'" % gif_filename)
 subprocess.check_call(["convert", "-limit", "memory", "1", "-limit", "map", "1",
     "-delay", str(delay), "-layers", "optimize", "-loop", "0", movie_filename, tmp_filename])
 
 subprocess.check_call(["convert", tmp_filename, "(", "+clone", "-set", "delay", str(loop_pause), ")", "+swap", "+delete", gif_filename])
 gif_size = os.path.getsize(gif_filename)
-print "     gif filesize  %6ik" % int(gif_size / 1000)
-print "compression ratio  %6i" % int(movie_size / gif_size)
+log("     gif filesize", "%ik" % int(gif_size / 1000))
+log("compression ratio", "%i:1" % int(movie_size / gif_size))
 
 os.remove(tmp_filename)
+
+print
